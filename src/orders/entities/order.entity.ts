@@ -14,7 +14,7 @@ export class Order {
   @JoinTable()
   products: Product[];
 
-  @Column('decimal')
+  @Column('decimal', { precision: 10, scale: 2 })
   totalPrice: number;
 
   @Column()

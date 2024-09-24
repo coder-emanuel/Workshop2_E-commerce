@@ -15,18 +15,42 @@ export class OrdersService {
 
   async create(createOrderDto: CreateOrderDto): Promise<Order> {
     const { userId, productIds } = createOrderDto;
-    const products = await Promise.all(productIds.map(id => this.productsService.findOne(id)));
-    
-    const totalPrice = products.reduce((sum, product) => sum + product.price, 0);
-    
-    const order = this.orderRepository.create({
-      user: { id: userId } as any,
-      products,
-      totalPrice,
-      createdAt: new Date().toISOString(),
+  
+    return await this.orderRepository.manager.transaction(async (transactionalEntityManager) => {
+      try {
+        const products = await Promise.all(
+          productIds.map(id => this.productsService.findOne(id))
+        );
+  
+        if (products.some(product => !product)) {
+          throw new NotFoundException('One or more products not found');
+        }
+  
+        const totalPrice = products.reduce((sum, product) => {
+          console.log(`Adding product price: ${product.price}`);
+          return sum + Number(product.price);
+        }, 0);
+  
+        console.log(`Calculated total price: ${totalPrice}`);
+  
+        const order = transactionalEntityManager.create(Order, {
+          user: { id: userId },
+          products,
+          totalPrice,
+          createdAt: new Date().toISOString(),
+        });
+  
+        console.log(`Created order object:`, order);
+  
+        const savedOrder = await transactionalEntityManager.save(Order, order);
+        console.log(`Saved order:`, savedOrder);
+  
+        return savedOrder;
+      } catch (error) {
+        console.error('Error creating order:', error);
+        throw new Error('Failed to create order');
+      }
     });
-
-    return await this.orderRepository.save(order);
   }
 
   async findAll(): Promise<Order[]> {
